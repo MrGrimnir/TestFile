@@ -20,10 +20,10 @@
         </header>
 
         <div class="grid grid-cols-1 lg:grid-cols-2 gap-10 items-start bg-white p-8 rounded-3xl shadow-xl border border-slate-200">
-            
+
             <!-- Model Diagram -->
             <div class="sticky top-10 flex justify-center">
-                <svg viewBox="0 0 400 400" class="w-full max-w-md drop-shadow-2xl">
+                <svg viewBox="0 0 400 400" class="w-full max-w-md drop-shadow-2xl" aria-label="Greatness model layers">
                     <rect x="5" y="5" width="390" height="390" rx="30" fill="#f8fafc" stroke="#64748b" stroke-dasharray="10,5" stroke-width="2" />
                     <text x="200" y="30" text-anchor="middle" font-weight="bold" fill="#94a3b8" class="text-[10px] uppercase tracking-widest">Environment • Culture • Leadership</text>
 
@@ -48,7 +48,7 @@
                 <div id="layer-content" class="hidden animate-in fade-in duration-500">
                     <div id="layer-tag" class="inline-block px-4 py-1 rounded-full text-xs font-black uppercase tracking-widest mb-4"></div>
                     <h2 id="layer-title" class="text-4xl font-black mb-4 text-slate-800"></h2>
-                    
+
                     <div class="bg-white p-6 rounded-2xl shadow-inner border border-slate-100 mb-6" id="layer-box">
                         <h3 class="font-bold text-slate-800 mb-3 uppercase text-xs tracking-widest">What this looks like in practice</h3>
                         <div id="layer-examples" class="grid grid-cols-1 md:grid-cols-2 gap-3"></div>
@@ -59,6 +59,9 @@
                         <p id="layer-action" class="text-slate-300 leading-relaxed"></p>
                     </div>
                 </div>
+
+                <!-- Dev-only sentinel; harmless in prod -->
+                <div class="sr-only" aria-hidden="true" id="test-sentinel">tests</div>
             </div>
         </div>
     </div>
@@ -75,7 +78,8 @@
                     "Drive and intrinsic motivation",
                     "Calibrated self-confidence",
                     "Insightful and forward thinking",
-                    "Ability to form authentic connection"
+                    "Ability to form authentic connection",
+                    "Ownership mindset (internal locus of responsibility)"
                 ],
                 action: "Hire for these. These traits surface under pressure and ambiguity and are extremely hard to retrofit later."
             },
@@ -89,7 +93,7 @@
                     "Inviting and acting on feedback",
                     "Willingness to ask for help",
                     "Sharing knowledge openly",
-                    "Proactive execution",
+                    "Proactive execution without waiting for permission",
                     "Reliability and steadiness"
                 ],
                 action: "Coach and reinforce these. Look for evidence in real scenarios, not rehearsed interview answers."
@@ -110,24 +114,35 @@
             }
         };
 
+        // Exposed globally because SVG uses inline onclick handlers.
         function showLayer(id) {
-            document.getElementById('default-msg').classList.add('hidden');
-            document.getElementById('layer-content').classList.remove('hidden');
+            if (!layers[id]) {
+                console.warn('Unknown layer id:', id);
+                return;
+            }
+
+            const defaultMsg = document.getElementById('default-msg');
+            const content = document.getElementById('layer-content');
+            const title = document.getElementById('layer-title');
+            const action = document.getElementById('layer-action');
+            const tag = document.getElementById('layer-tag');
+            const list = document.getElementById('layer-examples');
+
+            defaultMsg.classList.add('hidden');
+            content.classList.remove('hidden');
 
             const data = layers[id];
-            document.getElementById('layer-title').innerText = data.title;
-            document.getElementById('layer-action').innerText = data.action;
-            
-            const tag = document.getElementById('layer-tag');
+            title.innerText = data.title;
+            action.innerText = data.action;
+
             tag.innerText = data.tag;
             tag.className = `inline-block px-4 py-1 rounded-full text-xs font-black uppercase tracking-widest mb-4 ${data.tagColor}`;
-            
-            const list = document.getElementById('layer-examples');
+
             list.innerHTML = '';
             data.examples.forEach(ex => {
                 const item = document.createElement('div');
                 item.className = "flex items-start space-x-3 text-slate-700 font-medium";
-                item.innerHTML = `<span class=\"mt-2 h-1.5 w-1.5 rounded-full bg-slate-400\"></span><span>${ex}</span>`;
+                item.innerHTML = `<span class="mt-2 h-1.5 w-1.5 rounded-full bg-slate-400"></span><span>${ex}</span>`;
                 list.appendChild(item);
             });
 
@@ -136,6 +151,65 @@
             }
             document.getElementById('layer' + id).classList.add('active-layer');
         }
+
+        // --- Minimal test harness (runs in the browser console) ---
+        // Run only when URL includes ?dev=true so it doesn't change the default first-load UI.
+        function assert(condition, message) {
+            if (!condition) throw new Error('Test failed: ' + message);
+        }
+
+        function runTests() {
+            // Test 1: showLayer exists
+            assert(typeof showLayer === 'function', 'showLayer should be a function');
+
+            // Test 2: initial UI state (no layer selected)
+            assert(!document.getElementById('default-msg').classList.contains('hidden'), 'default message should be visible on load');
+            assert(document.getElementById('layer-content').classList.contains('hidden'), 'layer-content should be hidden on load');
+            [1,2,3].forEach(id => {
+                assert(!document.getElementById('layer' + id).classList.contains('active-layer'), `layer${id} should not be active on load`);
+            });
+
+            // Test 3: layers structure
+            [1,2,3].forEach(id => {
+                assert(layers[id], `layers[${id}] should exist`);
+                assert(Array.isArray(layers[id].examples), `layers[${id}].examples should be an array`);
+                assert(layers[id].examples.length > 0, `layers[${id}].examples should not be empty`);
+                layers[id].examples.forEach((ex, idx) => {
+                    assert(typeof ex === 'string', `layers[${id}].examples[${idx}] should be a string`);
+                    assert(ex.trim().length > 0, `layers[${id}].examples[${idx}] should not be blank`);
+                });
+            });
+
+            // Test 4: showLayer updates DOM without throwing
+            showLayer(1);
+            assert(!document.getElementById('layer-content').classList.contains('hidden'), 'layer-content should be visible after showLayer');
+            assert(document.getElementById('layer-title').innerText === layers[1].title, 'layer-title should match selected layer');
+            assert(document.getElementById('layer1').classList.contains('active-layer'), 'layer1 should be active after selecting 1');
+
+            showLayer(2);
+            assert(document.getElementById('layer-title').innerText === layers[2].title, 'layer-title should update when switching layers');
+            assert(document.getElementById('layer2').classList.contains('active-layer'), 'layer2 should be active after selecting 2');
+            assert(!document.getElementById('layer1').classList.contains('active-layer'), 'layer1 should not remain active after switching');
+
+            showLayer(3);
+            assert(document.getElementById('layer-title').innerText === layers[3].title, 'layer-title should update for layer 3');
+            assert(document.getElementById('layer3').classList.contains('active-layer'), 'layer3 should be active after selecting 3');
+
+            // Test 5: guard behaviour (unknown id)
+            showLayer(999);
+
+            console.log('%cAll tests passed ✅', 'font-weight:700');
+        }
+
+        window.addEventListener('DOMContentLoaded', () => {
+            const isDev = window.location.search.includes('dev=true');
+            if (!isDev) return;
+            try {
+                runTests();
+            } catch (e) {
+                console.error(e);
+            }
+        });
     </script>
 </body>
 </html>
